@@ -1,0 +1,645 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>LinkedIn Authority Dashboard â Archit Anand</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.9/babel.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/recharts/2.12.7/Recharts.min.js"></script>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #F8FAFC; }
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-thumb { background: #CBD5E1; border-radius: 3px; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useEffect } = React;
+const { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } = Recharts;
+
+// ââ CONFIGURATION ââ
+// Edit this data section each week to update the dashboard
+// Eventually this can be wired to read from Google Sheets or a JSON file
+
+const NAVY = "#1B2A4A";
+const ACCENT = "#2E75B6";
+const GREEN = "#27AE60";
+const YELLOW = "#F2994A";
+const RED = "#EB5757";
+const PURPLE = "#9B51E0";
+const LIGHT_BG = "#F8FAFC";
+const CARD_BG = "#FFFFFF";
+
+// âââââââââââââââââââââââââââââââââââââââââââ
+// ââ  WEEKLY DATA â UPDATE THIS EACH WEEK  ââ
+// âââââââââââââââââââââââââââââââââââââââââââ
+
+const CURRENT_WEEK = 1;
+const CURRENT_PHASE = "Builder";  // Builder | Thinker | Node
+const STREAK = 0;
+const WEEK_TYPE = "Full";  // Full | Light | Off
+const RECORD_STREAK = 0;
+
+// Posts â update status to "published" and add metrics after publishing
+const weeklyPosts = [
+  { week: 1, date: "Mar 17", day: "TUESDAY", pillar: "Commerce", formula: "Contrarian Truth", dTag: "Dreams", title: "AI agents won't kill eCommerce. They'll kill brand loyalty.", er: null, impressions: null, comments: null, saves: null, reposts: null, likes: null, status: "drafted", thesisScore: 3 },
+  { week: 1, date: "Mar 20", day: "THURSDAY", pillar: "Distribution", formula: "First-Principles", dTag: "Deliver", title: "You don't 'get' distribution. You build the rails for it.", er: null, impressions: null, comments: null, saves: null, reposts: null, likes: null, status: "drafted", thesisScore: 3 },
+  { week: 1, date: "Mar 22", day: "SATURDAY", pillar: "Cross-Border", formula: "Cross-Border Insight", dTag: "Done", title: "We had PMF in Singapore. It evaporated 2,100 km south.", er: null, impressions: null, comments: null, saves: null, reposts: null, likes: null, status: "drafted", thesisScore: 3 },
+];
+
+// Historical posts â append each week's posts here for trend tracking
+const allPosts = [...weeklyPosts];
+
+// Engagement targets for this week
+const engagementTargets = [
+  { name: "Sonakshi Nathani", tier: 1, pillar: "Commerce", followers: "47K", target: 4, actual: 0, stage: "Cold", commentType: "Add a Layer" },
+  { name: "Ronak Shah", tier: 1, pillar: "Distribution", followers: "40K", target: 4, actual: 0, stage: "Cold", commentType: "Add a Layer" },
+  { name: "Kaizad Hansotia", tier: 1, pillar: "Commerce", followers: "13K", target: 3, actual: 0, stage: "Cold", commentType: "Sharp Question" },
+  { name: "Devashish Sharma", tier: 2, pillar: "Distribution", followers: "11K", target: 3, actual: 0, stage: "Cold", commentType: "Add a Layer" },
+  { name: "Mohit Taneja", tier: 2, pillar: "Cross-Border", followers: "8K", target: 2, actual: 0, stage: "Cold", commentType: "Add a Layer" },
+  { name: "Vinav Bhanawat", tier: 2, pillar: "Founder", followers: "7K", target: 2, actual: 0, stage: "Cold", commentType: "Sharp Question" },
+  { name: "Shardul Aggarwal", tier: 3, pillar: "Commerce", followers: "4K", target: 1, actual: 0, stage: "Cold", commentType: "Add a Layer" },
+];
+
+// Relationship pipeline â update counts as people progress
+const relationshipPipeline = [
+  { stage: "Cold", count: 35, color: "#CBD5E1" },
+  { stage: "Warming", count: 0, color: YELLOW },
+  { stage: "Warm", count: 0, color: ACCENT },
+  { stage: "Active", count: 0, color: GREEN },
+  { stage: "Advocate", count: 0, color: PURPLE },
+];
+
+// Thesis development â update as theses sharpen
+const thesisScores = [
+  { pillar: "Distribution", thesis: "Distribution is infrastructure, not marketing â real distribution has repeatability, compounding, and defensibility", sharpness: "Strong", score: 3, color: ACCENT },
+  { pillar: "Cross-Border", thesis: "PMF doesn't transfer across borders â what transfers is the ability to find PMF again", sharpness: "Strong", score: 3, color: PURPLE },
+  { pillar: "Commerce", thesis: "Agentic commerce will kill brand loyalty before it improves conversion", sharpness: "Strong", score: 3, color: GREEN },
+  { pillar: "Founder", thesis: "Not yet articulated â needs a post in Week 2", sharpness: "Needs work", score: 0, color: YELLOW },
+];
+
+// Signature stories
+const signatureStories = [
+  { name: "Omnirio Scale ($10B+ transactions)", pillar: "Distribution, Commerce", uses: 1, maxUses: 3, status: "ok" },
+  { name: "Cross-Border PMF (Singapore â Philippines)", pillar: "Cross-Border", uses: 1, maxUses: 3, status: "ok" },
+  { name: "Anchanto 0 â 100M monthly", pillar: "Distribution", uses: 1, maxUses: 3, status: "ok" },
+  { name: "Fuelgrowth AI-Native Build", pillar: "Commerce", uses: 0, maxUses: 3, status: "untapped" },
+  { name: "The Exit Decision", pillar: "Founder", uses: 0, maxUses: 3, status: "untapped" },
+  { name: "The Intentional Pause", pillar: "Founder", uses: 0, maxUses: 3, status: "untapped" },
+  { name: "Multi-Market Hiring", pillar: "Cross-Border", uses: 0, maxUses: 3, status: "untapped" },
+];
+
+// Weekly trend data â append each week
+const weeklyTrend = [
+  { week: "W1", er: null, comments: 0, impressions: 0, threadsStarted: 0, commentsLeft: 0 },
+];
+
+// Weekly wins â update Sunday evening
+const weeklyWins = {
+  content: "â",
+  engagement: "â",
+  system: "â",
+  streak: "Week 0 â starting fresh",
+};
+
+// Creative risk prompt
+const currentRiskPrompt = "Format risk: Try a Question Post this week â keep it under 100 words. See what happens when you lead with curiosity instead of a thesis.";
+const riskPromptsSkipped = 0;
+
+// DM tracking
+const dmStats = { notSent: 35, sentNoResponse: 0, responded: 0, activeConversation: 0, metIRL: 0 };
+
+// âââââââââââââââââââââââââââââââââââââââ
+// ââ  END OF WEEKLY DATA SECTION       ââ
+// âââââââââââââââââââââââââââââââââââââââ
+
+// ââ Derived calculations ââ
+const pillarBalance = (() => {
+  const published = allPosts.filter(p => p.status === "published" || p.status === "drafted");
+  const total = published.length || 1;
+  const count = { Distribution: 0, "Cross-Border": 0, Commerce: 0, Founder: 0 };
+  published.forEach(p => { if (count.hasOwnProperty(p.pillar)) count[p.pillar]++; });
+  return [
+    { name: "Distribution", target: 30, actual: Math.round((count.Distribution / total) * 100), color: ACCENT },
+    { name: "Cross-Border", target: 25, actual: Math.round((count["Cross-Border"] / total) * 100), color: PURPLE },
+    { name: "Commerce", target: 25, actual: Math.round((count.Commerce / total) * 100), color: GREEN },
+    { name: "Founder", target: 20, actual: Math.round((count.Founder / total) * 100), color: YELLOW },
+  ];
+})();
+
+const knownWellBalance = (() => {
+  const tags = { Done: 0, Deliver: 0, Do: 0, Dreams: 0, "Dork Out": 0 };
+  allPosts.forEach(p => { if (tags.hasOwnProperty(p.dTag)) tags[p.dTag]++; });
+  return Object.entries(tags).map(([tag, count]) => ({ tag, count }));
+})();
+
+const totalEngagementTarget = engagementTargets.reduce((s, e) => s + e.target, 0);
+const totalEngagementActual = engagementTargets.reduce((s, e) => s + e.actual, 0);
+const postsPublished = weeklyPosts.filter(p => p.status === "published").length;
+const publishedWithER = allPosts.filter(p => p.er !== null);
+const avgER = publishedWithER.length > 0 ? (publishedWithER.reduce((s, p) => s + p.er, 0) / publishedWithER.length).toFixed(1) : "â";
+const thesisAvg = (() => {
+  const scored = thesisScores.filter(t => t.score > 0);
+  return scored.length > 0 ? (scored.reduce((s, t) => s + t.score, 0) / scored.length).toFixed(1) : "â";
+})();
+const contentThesisAvg = (() => {
+  const scored = weeklyPosts.filter(p => p.thesisScore);
+  return scored.length > 0 ? (scored.reduce((s, p) => s + p.thesisScore, 0) / scored.length).toFixed(1) : "â";
+})();
+
+const phaseTargets = {
+  Builder: [
+    { metric: "Streak count", target: "8+ consecutive Full Weeks", current: `${STREAK}`, met: STREAK >= 8 },
+    { metric: "Avg engagement rate", target: "Rising trend, 5%+", current: avgER === "â" ? "No data" : `${avgER}%`, met: parseFloat(avgER) >= 5 },
+    { metric: "Meaningful threads/week", target: "5+", current: "No data", met: false },
+    { metric: "Posts shipped/week", target: "3", current: `${postsPublished}/3`, met: postsPublished >= 3 },
+  ],
+  Thinker: [
+    { metric: "Inbound DMs/week", target: "5+", current: "No data", met: false },
+    { metric: "Substack subscribers", target: "Growing", current: "Not started", met: false },
+    { metric: "Tier 1 Active relationships", target: "2+", current: `${relationshipPipeline.find(r => r.stage === "Active")?.count || 0}`, met: false },
+    { metric: "Citable theses", target: "3+ pillars", current: `${thesisScores.filter(t => t.sharpness === "Strong").length}`, met: thesisScores.filter(t => t.sharpness === "Strong").length >= 3 },
+  ],
+  Node: [
+    { metric: "Inbound requests", target: "Speaking/advisory", current: "No data", met: false },
+    { metric: "Framework references", target: "Others citing you", current: "No data", met: false },
+    { metric: "Active/Advocate relationships", target: "10+", current: "0", met: false },
+  ],
+};
+
+// ââ Components ââ
+const MetricCard = ({ label, value, subtitle, color = NAVY, icon }) => (
+  <div style={{ background: CARD_BG, borderRadius: 12, padding: "20px 24px", boxShadow: "0 1px 3px rgba(0,0,0,0.08)", flex: 1, minWidth: 155 }}>
+    <div style={{ fontSize: 11, color: "#94A3B8", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 8 }}>
+      {icon && <span style={{ marginRight: 6 }}>{icon}</span>}{label}
+    </div>
+    <div style={{ fontSize: 28, fontWeight: 700, color, lineHeight: 1.1 }}>{value}</div>
+    {subtitle && <div style={{ fontSize: 12, color: "#64748B", marginTop: 4 }}>{subtitle}</div>}
+  </div>
+);
+
+const SectionHeader = ({ title, subtitle }) => (
+  <div style={{ marginBottom: 16, marginTop: 32 }}>
+    <h2 style={{ fontSize: 17, fontWeight: 700, color: NAVY, margin: 0 }}>{title}</h2>
+    {subtitle && <p style={{ fontSize: 12, color: "#94A3B8", margin: "4px 0 0" }}>{subtitle}</p>}
+  </div>
+);
+
+const StatusBadge = ({ status }) => {
+  const colors = {
+    drafted: { bg: "#EFF6FF", text: ACCENT }, published: { bg: "#ECFDF5", text: GREEN },
+    pending: { bg: "#FFF7ED", text: YELLOW }, overused: { bg: "#FEF2F2", text: RED },
+    ok: { bg: "#ECFDF5", text: GREEN }, untapped: { bg: "#F5F3FF", text: PURPLE },
+    "Needs work": { bg: "#FFF7ED", text: YELLOW }, Strong: { bg: "#ECFDF5", text: GREEN },
+  };
+  const c = colors[status] || colors.pending;
+  return <span style={{ background: c.bg, color: c.text, padding: "3px 10px", borderRadius: 20, fontSize: 11, fontWeight: 600 }}>{status}</span>;
+};
+
+const ProgressBar = ({ value, max, color = ACCENT, height = 8 }) => (
+  <div style={{ background: "#EDF2F7", borderRadius: height / 2, height, width: "100%", overflow: "hidden" }}>
+    <div style={{ background: color, height: "100%", width: `${Math.min((value / max) * 100, 100)}%`, borderRadius: height / 2, transition: "width 0.5s ease" }} />
+  </div>
+);
+
+const TierBadge = ({ tier }) => {
+  const colors = { 1: GREEN, 2: YELLOW, 3: PURPLE };
+  return <span style={{ background: colors[tier] + "20", color: colors[tier], padding: "2px 8px", borderRadius: 12, fontSize: 11, fontWeight: 700 }}>T{tier}</span>;
+};
+
+const StageBadge = ({ stage }) => {
+  const colors = { Cold: "#94A3B8", Warming: YELLOW, Warm: ACCENT, Active: GREEN, Advocate: PURPLE };
+  return <span style={{ background: (colors[stage] || "#94A3B8") + "18", color: colors[stage] || "#94A3B8", padding: "2px 8px", borderRadius: 12, fontSize: 11, fontWeight: 600 }}>{stage}</span>;
+};
+
+// ââ Main Dashboard ââ
+function Dashboard() {
+  const [activeTab, setActiveTab] = useState("overview");
+  const [now, setNow] = useState(new Date());
+
+  useEffect(() => { const t = setInterval(() => setNow(new Date()), 60000); return () => clearInterval(t); }, []);
+
+  const tabs = [
+    { id: "overview", label: "Overview", icon: "ð" },
+    { id: "content", label: "Content", icon: "ð" },
+    { id: "engagement", label: "Engagement", icon: "ð¬" },
+    { id: "thesis", label: "Thesis", icon: "ð¯" },
+    { id: "relationships", label: "Relationships", icon: "ð¤" },
+    { id: "wins", label: "Wins", icon: "ð" },
+  ];
+
+  return (
+    <div style={{ background: LIGHT_BG, minHeight: "100vh" }}>
+      {/* Header */}
+      <div style={{ background: `linear-gradient(135deg, ${NAVY} 0%, #1e3a5f 50%, ${ACCENT} 100%)`, padding: "24px 32px 16px", color: "white" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16, maxWidth: 1200, margin: "0 auto 16px" }}>
+          <div>
+            <h1 style={{ margin: 0, fontSize: 22, fontWeight: 700, letterSpacing: "-0.02em" }}>LinkedIn Authority System</h1>
+            <p style={{ margin: "4px 0 0", opacity: 0.75, fontSize: 13 }}>Archit Anand â Week {CURRENT_WEEK} Â· {CURRENT_PHASE} Phase Â· {now.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</p>
+          </div>
+          <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+            <div style={{ textAlign: "center", background: "rgba(255,255,255,0.15)", padding: "8px 16px", borderRadius: 10 }}>
+              <div style={{ fontSize: 10, opacity: 0.7, textTransform: "uppercase", letterSpacing: "0.08em" }}>Week Type</div>
+              <div style={{ fontSize: 16, fontWeight: 700, marginTop: 2 }}>{WEEK_TYPE}</div>
+            </div>
+            <div style={{ textAlign: "center", background: "rgba(255,255,255,0.15)", padding: "8px 16px", borderRadius: 10 }}>
+              <div style={{ fontSize: 10, opacity: 0.7, textTransform: "uppercase", letterSpacing: "0.08em" }}>Streak</div>
+              <div style={{ fontSize: 16, fontWeight: 700, marginTop: 2 }}>ð¥ {STREAK}</div>
+            </div>
+          </div>
+        </div>
+        <div style={{ display: "flex", gap: 2, maxWidth: 1200, margin: "0 auto", overflowX: "auto" }}>
+          {tabs.map(tab => (
+            <button key={tab.id} onClick={() => setActiveTab(tab.id)} style={{
+              background: activeTab === tab.id ? "rgba(255,255,255,0.2)" : "transparent",
+              border: "none", color: "white", padding: "8px 14px", borderRadius: 8,
+              fontSize: 13, fontWeight: activeTab === tab.id ? 700 : 400, cursor: "pointer",
+              opacity: activeTab === tab.id ? 1 : 0.7, transition: "all 0.2s", whiteSpace: "nowrap"
+            }}>
+              {tab.icon} {tab.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div style={{ padding: "24px 32px", maxWidth: 1200, margin: "0 auto" }}>
+
+        {/* âââ OVERVIEW âââ */}
+        {activeTab === "overview" && (<>
+          <div style={{ display: "flex", gap: 14, flexWrap: "wrap" }}>
+            <MetricCard icon="ð¥" label="Streak" value={STREAK} subtitle={`Record: ${RECORD_STREAK}`} color={STREAK >= 4 ? GREEN : NAVY} />
+            <MetricCard icon="ð" label="Posts" value={`${postsPublished}/3`} subtitle="published this week" />
+            <MetricCard icon="ð¬" label="Comments" value={`${totalEngagementActual}/${totalEngagementTarget}`} subtitle="quality comments" color={totalEngagementActual >= totalEngagementTarget * 0.8 ? GREEN : NAVY} />
+            <MetricCard icon="ð" label="Avg ER" value={avgER === "â" ? "â" : `${avgER}%`} subtitle="engagement rate" color={ACCENT} />
+            <MetricCard icon="ð¯" label="Thesis" value={contentThesisAvg === "â" ? "â" : `${contentThesisAvg}/3`} subtitle="alignment score" color={parseFloat(contentThesisAvg) >= 2.5 ? GREEN : YELLOW} />
+          </div>
+
+          <SectionHeader title="Phase Targets" subtitle={`${CURRENT_PHASE} phase â ${CURRENT_PHASE === "Builder" ? "Establish voice and consistency" : CURRENT_PHASE === "Thinker" ? "Develop defensible theses" : "Become the reference node"}`} />
+          <div style={{ background: CARD_BG, borderRadius: 12, padding: 20, boxShadow: "0 1px 3px rgba(0,0,0,0.08)" }}>
+            {(phaseTargets[CURRENT_PHASE] || []).map((t, i) => (
+              <div key={i} style={{ display: "flex", alignItems: "center", padding: "10px 0", borderBottom: i < (phaseTargets[CURRENT_PHASE] || []).length - 1 ? `1px solid ${LIGHT_BG}` : "none" }}>
+                <span style={{ fontSize: 18, marginRight: 12, width: 28 }}>{t.met ? "â" : "â¬"}</span>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 14, fontWeight: 500, color: NAVY }}>{t.metric}</div>
+                </div>
+                <div style={{ fontSize: 13, color: "#64748B", marginRight: 20, minWidth: 100 }}>{t.current}</div>
+                <div style={{ fontSize: 12, color: "#94A3B8", minWidth: 140, textAlign: "right" }}>Target: {t.target}</div>
+              </div>
+            ))}
+          </div>
+
+          <SectionHeader title="Pillar Balance" subtitle="Target vs. actual â 2-week rolling window" />
+          <div style={{ background: CARD_BG, borderRadius: 12, padding: 20, boxShadow: "0 1px 3px rgba(0,0,0,0.08)" }}>
+            {pillarBalance.map((p, i) => (
+              <div key={i} style={{ marginBottom: i < pillarBalance.length - 1 ? 14 : 0 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 5 }}>
+                  <span style={{ fontSize: 13, fontWeight: 500, color: NAVY }}>{p.name}</span>
+                  <span style={{ fontSize: 12, color: "#64748B" }}>{p.actual}% <span style={{ color: "#CBD5E1" }}>/ {p.target}%</span></span>
+                </div>
+                <div style={{ position: "relative" }}>
+                  <ProgressBar value={p.actual} max={50} color={p.color} height={10} />
+                  <div style={{ position: "absolute", top: -2, left: `${(p.target / 50) * 100}%`, width: 2, height: 14, background: RED, borderRadius: 1, opacity: 0.5 }} />
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <SectionHeader title="Known Well Balance" subtitle="5 D's â Done, Deliver, Do, Dreams, Dork Out" />
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+            {knownWellBalance.map((k, i) => (
+              <div key={i} style={{ background: CARD_BG, borderRadius: 12, padding: "14px 18px", boxShadow: "0 1px 3px rgba(0,0,0,0.08)", flex: 1, minWidth: 90, textAlign: "center", border: k.count > 0 ? `2px solid ${GREEN}30` : "2px solid transparent" }}>
+                <div style={{ fontSize: 22, fontWeight: 700, color: k.count > 0 ? GREEN : "#CBD5E1" }}>{k.count}</div>
+                <div style={{ fontSize: 11, color: "#64748B", fontWeight: 600, marginTop: 2 }}>{k.tag}</div>
+              </div>
+            ))}
+          </div>
+
+          <SectionHeader title="System Health" />
+          <div style={{ background: CARD_BG, borderRadius: 12, padding: 20, boxShadow: "0 1px 3px rgba(0,0,0,0.08)", display: "flex", gap: 24, flexWrap: "wrap" }}>
+            <div style={{ flex: 1, minWidth: 180 }}>
+              <div style={{ fontSize: 11, color: "#94A3B8", fontWeight: 600, marginBottom: 6 }}>ESCALATION</div>
+              <div style={{ fontSize: 13, color: GREEN, fontWeight: 500 }}>â No missed weeks</div>
+            </div>
+            <div style={{ flex: 1, minWidth: 180 }}>
+              <div style={{ fontSize: 11, color: "#94A3B8", fontWeight: 600, marginBottom: 6 }}>COASTING</div>
+              <div style={{ fontSize: 13, color: GREEN, fontWeight: 500 }}>â Clean</div>
+            </div>
+            <div style={{ flex: 1, minWidth: 180 }}>
+              <div style={{ fontSize: 11, color: "#94A3B8", fontWeight: 600, marginBottom: 6 }}>KILL CRITERIA</div>
+              <div style={{ fontSize: 13, color: "#64748B", fontWeight: 500 }}>â¬ Needs 4+ weeks data</div>
+            </div>
+          </div>
+        </>)}
+
+        {/* âââ CONTENT âââ */}
+        {activeTab === "content" && (<>
+          <SectionHeader title="This Week's Posts" subtitle="Tue / Thu / Sat â update status and metrics after publishing" />
+          {weeklyPosts.map((post, i) => (
+            <div key={i} style={{ background: CARD_BG, borderRadius: 12, padding: 20, marginBottom: 12, boxShadow: "0 1px 3px rgba(0,0,0,0.08)", borderLeft: `4px solid ${pillarBalance.find(p => p.name === post.pillar)?.color || ACCENT}` }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 10 }}>
+                <div>
+                  <div style={{ fontSize: 11, color: "#94A3B8", fontWeight: 600 }}>{post.date} â {post.day}</div>
+                  <div style={{ fontSize: 15, fontWeight: 600, color: NAVY, marginTop: 4, lineHeight: 1.3 }}>"{post.title}"</div>
+                </div>
+                <StatusBadge status={post.status} />
+              </div>
+              <div style={{ display: "flex", gap: 14, flexWrap: "wrap", fontSize: 12, color: "#64748B" }}>
+                <span><b>Pillar:</b> {post.pillar}</span>
+                <span><b>Formula:</b> {post.formula}</span>
+                <span><b>Known Well:</b> {post.dTag}</span>
+                <span><b>Thesis:</b> {post.thesisScore}/3</span>
+              </div>
+              {post.er !== null && (
+                <div style={{ display: "flex", gap: 20, marginTop: 12, paddingTop: 12, borderTop: `1px solid ${LIGHT_BG}`, fontSize: 13 }}>
+                  <span><span style={{ color: "#94A3B8" }}>ER:</span> <b style={{ color: GREEN }}>{post.er}%</b></span>
+                  <span><span style={{ color: "#94A3B8" }}>Impressions:</span> <b>{post.impressions?.toLocaleString()}</b></span>
+                  <span><span style={{ color: "#94A3B8" }}>Comments:</span> <b>{post.comments}</b></span>
+                  <span><span style={{ color: "#94A3B8" }}>Saves:</span> <b>{post.saves}</b></span>
+                  <span><span style={{ color: "#94A3B8" }}>Reposts:</span> <b>{post.reposts}</b></span>
+                </div>
+              )}
+            </div>
+          ))}
+
+          <SectionHeader title="Formula Rotation" subtitle="Track variety â use all 6 formulas over a 2-week period" />
+          <div style={{ background: CARD_BG, borderRadius: 12, padding: 16, boxShadow: "0 1px 3px rgba(0,0,0,0.08)" }}>
+            {["Contrarian Truth", "First-Principles", "Cross-Border Insight", "Inflection Point", "Quick Framework", "Question Post"].map((f, i) => {
+              const used = allPosts.some(p => p.formula === f);
+              return (
+                <div key={i} style={{ display: "flex", alignItems: "center", padding: "7px 8px", borderBottom: i < 5 ? `1px solid ${LIGHT_BG}` : "none" }}>
+                  <span style={{ fontSize: 16, marginRight: 10 }}>{used ? "â" : "â¬"}</span>
+                  <span style={{ fontSize: 13, color: used ? NAVY : "#94A3B8", fontWeight: used ? 500 : 400, flex: 1 }}>{f}</span>
+                  {used && <span style={{ fontSize: 11, color: GREEN, fontWeight: 600 }}>Used W{CURRENT_WEEK}</span>}
+                </div>
+              );
+            })}
+          </div>
+
+          {weeklyTrend.length > 1 && (<>
+            <SectionHeader title="Engagement Rate Trend" subtitle="Week-over-week performance" />
+            <div style={{ background: CARD_BG, borderRadius: 12, padding: 20, boxShadow: "0 1px 3px rgba(0,0,0,0.08)", height: 250 }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={weeklyTrend.filter(w => w.er !== null)}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#EDF2F7" />
+                  <XAxis dataKey="week" tick={{ fontSize: 12 }} />
+                  <YAxis tick={{ fontSize: 12 }} />
+                  <Tooltip />
+                  <Line type="monotone" dataKey="er" stroke={ACCENT} strokeWidth={2} dot={{ r: 4 }} name="Engagement Rate %" />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          </>)}
+        </>)}
+
+        {/* âââ ENGAGEMENT âââ */}
+        {activeTab === "engagement" && (<>
+          <div style={{ display: "flex", gap: 14, flexWrap: "wrap", marginBottom: 8 }}>
+            <MetricCard icon="ð¬" label="Comments Left" value={`${totalEngagementActual}`} subtitle={`of ${totalEngagementTarget} target`} />
+            <MetricCard icon="ð¯" label="Hit Rate" value={totalEngagementTarget > 0 ? `${Math.round((totalEngagementActual / totalEngagementTarget) * 100)}%` : "0%"} subtitle="of weekly target" color={totalEngagementActual >= totalEngagementTarget * 0.8 ? GREEN : YELLOW} />
+            <MetricCard icon="ð" label="Reply Threads" value="â" subtitle="2+ reply conversations" />
+          </div>
+
+          <SectionHeader title="Weekly Engagement Targets" subtitle="80% of your effort â who to engage with and how" />
+          <div style={{ background: CARD_BG, borderRadius: 12, boxShadow: "0 1px 3px rgba(0,0,0,0.08)", overflow: "hidden" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse" }}>
+              <thead>
+                <tr style={{ background: LIGHT_BG }}>
+                  {["PERSON", "TIER", "PILLAR", "APPROACH", "PROGRESS", "STAGE"].map(h => (
+                    <th key={h} style={{ textAlign: h === "PROGRESS" ? "center" : "left", padding: "9px 14px", fontSize: 11, color: "#94A3B8", fontWeight: 600 }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {engagementTargets.map((e, i) => (
+                  <tr key={i} style={{ borderBottom: `1px solid ${LIGHT_BG}` }}>
+                    <td style={{ padding: "10px 14px" }}>
+                      <div style={{ fontSize: 13, fontWeight: 500, color: NAVY }}>{e.name}</div>
+                      <div style={{ fontSize: 11, color: "#94A3B8" }}>{e.followers}</div>
+                    </td>
+                    <td style={{ padding: "10px 14px" }}><TierBadge tier={e.tier} /></td>
+                    <td style={{ padding: "10px 14px", fontSize: 12, color: "#64748B" }}>{e.pillar}</td>
+                    <td style={{ padding: "10px 14px", fontSize: 12, color: "#64748B" }}>{e.commentType}</td>
+                    <td style={{ padding: "10px 14px", width: 140 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                        <ProgressBar value={e.actual} max={e.target} color={e.actual >= e.target ? GREEN : ACCENT} />
+                        <span style={{ fontSize: 11, color: "#64748B", whiteSpace: "nowrap" }}>{e.actual}/{e.target}</span>
+                      </div>
+                    </td>
+                    <td style={{ padding: "10px 14px" }}><StageBadge stage={e.stage} /></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          <SectionHeader title="Comment Strategy" subtitle="Week 1: Lead with Add a Layer + Sharp Question" />
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+            {[
+              { type: "Add a Layer", desc: "Show a perspective they don't have", priority: "primary", icon: "ð§±" },
+              { type: "Sharp Question", desc: "Reveal you've read deeply", priority: "secondary", icon: "â" },
+              { type: "Thread Starter", desc: "Spark multi-reply conversations", priority: "week 2-3", icon: "ð§µ" },
+              { type: "Respectful Challenge", desc: "Push back with evidence", priority: "week 2-3", icon: "â¡" },
+            ].map((c, i) => (
+              <div key={i} style={{ background: CARD_BG, borderRadius: 12, padding: "14px 18px", flex: 1, minWidth: 180, boxShadow: "0 1px 3px rgba(0,0,0,0.08)", border: c.priority === "primary" ? `2px solid ${GREEN}` : c.priority === "secondary" ? `2px solid ${ACCENT}` : "2px solid transparent" }}>
+                <div style={{ fontSize: 13, fontWeight: 600, color: NAVY }}>{c.icon} {c.type}</div>
+                <div style={{ fontSize: 11, color: "#64748B", marginTop: 4 }}>{c.desc}</div>
+                <div style={{ fontSize: 10, fontWeight: 700, marginTop: 6, color: c.priority === "primary" ? GREEN : c.priority === "secondary" ? ACCENT : "#CBD5E1", textTransform: "uppercase" }}>{c.priority}</div>
+              </div>
+            ))}
+          </div>
+        </>)}
+
+        {/* âââ THESIS âââ */}
+        {activeTab === "thesis" && (<>
+          <SectionHeader title="Pillar Theses" subtitle="Each pillar needs a defensible, one-sentence thesis" />
+          {thesisScores.map((t, i) => (
+            <div key={i} style={{ background: CARD_BG, borderRadius: 12, padding: 18, marginBottom: 10, boxShadow: "0 1px 3px rgba(0,0,0,0.08)", borderLeft: `4px solid ${t.color}` }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <div style={{ flex: 1, marginRight: 16 }}>
+                  <div style={{ fontSize: 11, color: "#94A3B8", fontWeight: 600 }}>{t.pillar.toUpperCase()}</div>
+                  <div style={{ fontSize: 14, fontWeight: 500, color: NAVY, marginTop: 4, lineHeight: 1.4 }}>"{t.thesis}"</div>
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <StatusBadge status={t.sharpness} />
+                  <div style={{ background: t.score >= 3 ? GREEN + "15" : t.score >= 2 ? YELLOW + "15" : "#FEF2F2", color: t.score >= 3 ? GREEN : t.score >= 2 ? YELLOW : RED, padding: "4px 10px", borderRadius: 8, fontSize: 13, fontWeight: 700 }}>{t.score}/3</div>
+                </div>
+              </div>
+            </div>
+          ))}
+
+          <div style={{ background: `linear-gradient(135deg, ${NAVY}, ${ACCENT})`, borderRadius: 12, padding: 24, marginTop: 20, color: "white" }}>
+            <div style={{ fontSize: 11, fontWeight: 600, opacity: 0.7, textTransform: "uppercase", letterSpacing: "0.06em" }}>THE "WOULD THEY CITE YOU?" TEST</div>
+            <div style={{ fontSize: 15, fontWeight: 500, marginTop: 8, lineHeight: 1.4 }}>Based on Week {CURRENT_WEEK} content, someone would cite Archit for:</div>
+            <div style={{ fontSize: 17, fontWeight: 700, marginTop: 10, fontStyle: "italic", lineHeight: 1.4 }}>"Agentic commerce will kill brand loyalty before it improves conversion â because agents bypass discovery entirely."</div>
+            <div style={{ fontSize: 12, marginTop: 10, opacity: 0.65 }}>Update this after each health check. If the answer is vague, thesis development is failing.</div>
+          </div>
+
+          <SectionHeader title="Signature Story Archive" subtitle="7 stories â track usage to prevent overuse (max 3 per 4 weeks)" />
+          <div style={{ background: CARD_BG, borderRadius: 12, boxShadow: "0 1px 3px rgba(0,0,0,0.08)", overflow: "hidden" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse" }}>
+              <thead>
+                <tr style={{ background: LIGHT_BG }}>
+                  {["STORY", "PILLAR", "USES (4wk)", "STATUS"].map(h => (
+                    <th key={h} style={{ textAlign: h === "USES (4wk)" || h === "STATUS" ? "center" : "left", padding: "9px 14px", fontSize: 11, color: "#94A3B8", fontWeight: 600 }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {signatureStories.map((s, i) => (
+                  <tr key={i} style={{ borderBottom: `1px solid ${LIGHT_BG}` }}>
+                    <td style={{ padding: "10px 14px", fontSize: 13, fontWeight: 500, color: NAVY }}>{s.name}</td>
+                    <td style={{ padding: "10px 14px", fontSize: 12, color: "#64748B" }}>{s.pillar}</td>
+                    <td style={{ padding: "10px 14px", textAlign: "center" }}>
+                      <div style={{ display: "flex", justifyContent: "center", gap: 3 }}>
+                        {[...Array(s.maxUses)].map((_, j) => (
+                          <div key={j} style={{ width: 10, height: 10, borderRadius: "50%", background: j < s.uses ? (s.uses >= 3 ? RED : ACCENT) : "#EDF2F7" }} />
+                        ))}
+                      </div>
+                    </td>
+                    <td style={{ padding: "10px 14px", textAlign: "center" }}><StatusBadge status={s.status} /></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>)}
+
+        {/* âââ RELATIONSHIPS âââ */}
+        {activeTab === "relationships" && (<>
+          <SectionHeader title="Relationship Pipeline" subtitle="35 people across 5 stages" />
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 8 }}>
+            {relationshipPipeline.map((r, i) => (
+              <div key={i} style={{ background: CARD_BG, borderRadius: 12, padding: "18px 22px", flex: 1, minWidth: 100, boxShadow: "0 1px 3px rgba(0,0,0,0.08)", textAlign: "center", borderTop: `4px solid ${r.color}` }}>
+                <div style={{ fontSize: 28, fontWeight: 700, color: r.color === "#CBD5E1" ? "#64748B" : r.color }}>{r.count}</div>
+                <div style={{ fontSize: 12, color: "#64748B", fontWeight: 500, marginTop: 2 }}>{r.stage}</div>
+              </div>
+            ))}
+          </div>
+
+          <SectionHeader title="DM Pipeline" subtitle="Track readiness and conversation status" />
+          <div style={{ background: CARD_BG, borderRadius: 12, padding: 20, boxShadow: "0 1px 3px rgba(0,0,0,0.08)", display: "flex", gap: 32, flexWrap: "wrap" }}>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 11, color: "#94A3B8", fontWeight: 600, marginBottom: 10 }}>DM READINESS</div>
+              {[
+                { label: "Not ready", count: 35, desc: "Need 3+ quality exchanges", color: RED },
+                { label: "Almost", count: 0, desc: "3+ exchanges, no inbound yet", color: YELLOW },
+                { label: "Ready", count: 0, desc: "3+ exchanges + inbound signal", color: GREEN },
+              ].map((d, i) => (
+                <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
+                  <div style={{ width: 36, height: 36, borderRadius: "50%", background: d.color + "15", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15, fontWeight: 700, color: d.color }}>{d.count}</div>
+                  <div>
+                    <div style={{ fontSize: 13, fontWeight: 500, color: NAVY }}>{d.label}</div>
+                    <div style={{ fontSize: 11, color: "#94A3B8" }}>{d.desc}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 11, color: "#94A3B8", fontWeight: 600, marginBottom: 10 }}>DM STATUS</div>
+              {Object.entries(dmStats).map(([key, val], i) => {
+                const labels = { notSent: "Not Sent", sentNoResponse: "Sent â No Response", responded: "Responded", activeConversation: "Active Conversation", metIRL: "Met IRL" };
+                return (
+                  <div key={i} style={{ display: "flex", justifyContent: "space-between", padding: "6px 0", borderBottom: i < 4 ? `1px solid ${LIGHT_BG}` : "none" }}>
+                    <span style={{ fontSize: 12, color: "#64748B" }}>{labels[key]}</span>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: NAVY }}>{val}</span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          <SectionHeader title="Phase Transition Signals" subtitle={`${CURRENT_PHASE} â ${CURRENT_PHASE === "Builder" ? "Thinker" : "Node"}`} />
+          <div style={{ background: CARD_BG, borderRadius: 12, padding: 16, boxShadow: "0 1px 3px rgba(0,0,0,0.08)" }}>
+            {(CURRENT_PHASE === "Builder" ? [
+              { signal: "8+ consecutive Full Weeks", current: `${STREAK} weeks`, met: STREAK >= 8 },
+              { signal: "Average ER above 5%", current: avgER === "â" ? "No data" : `${avgER}%`, met: parseFloat(avgER) >= 5 },
+              { signal: "3+ warm relationships", current: `${relationshipPipeline.find(r => r.stage === "Warm")?.count || 0}`, met: (relationshipPipeline.find(r => r.stage === "Warm")?.count || 0) >= 3 },
+            ] : [
+              { signal: "Clear thesis for 3+ pillars", current: `${thesisScores.filter(t => t.sharpness === "Strong").length}`, met: thesisScores.filter(t => t.sharpness === "Strong").length >= 3 },
+              { signal: "5+ Active relationships", current: `${relationshipPipeline.find(r => r.stage === "Active")?.count || 0}`, met: false },
+              { signal: "Inbound DM rate >3/week", current: "No data", met: false },
+            ]).map((s, i) => (
+              <div key={i} style={{ display: "flex", alignItems: "center", padding: "8px 4px", borderBottom: i < 2 ? `1px solid ${LIGHT_BG}` : "none" }}>
+                <span style={{ fontSize: 16, marginRight: 10, width: 24 }}>{s.met ? "â" : "â¬"}</span>
+                <div style={{ flex: 1, fontSize: 13, fontWeight: 500, color: NAVY }}>{s.signal}</div>
+                <div style={{ fontSize: 12, color: "#94A3B8" }}>{s.current}</div>
+              </div>
+            ))}
+          </div>
+        </>)}
+
+        {/* âââ WINS âââ */}
+        {activeTab === "wins" && (<>
+          <SectionHeader title="This Week's Wins" subtitle="Never skip this â momentum comes from noticing progress" />
+          <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+            {[
+              { icon: "ð", label: "Content Win", value: weeklyWins.content, color: ACCENT },
+              { icon: "ð¬", label: "Engagement Win", value: weeklyWins.engagement, color: GREEN },
+              { icon: "âï¸", label: "System Win", value: weeklyWins.system, color: PURPLE },
+              { icon: "ð¥", label: "Streak", value: weeklyWins.streak, color: YELLOW },
+            ].map((w, i) => (
+              <div key={i} style={{ background: CARD_BG, borderRadius: 12, padding: 20, flex: 1, minWidth: 240, boxShadow: "0 1px 3px rgba(0,0,0,0.08)", borderTop: `3px solid ${w.color}` }}>
+                <div style={{ fontSize: 11, color: "#94A3B8", fontWeight: 600, textTransform: "uppercase" }}>{w.icon} {w.label}</div>
+                <div style={{ fontSize: 14, color: NAVY, marginTop: 8, lineHeight: 1.4 }}>{w.value}</div>
+              </div>
+            ))}
+          </div>
+
+          <SectionHeader title="Creative Risk Prompt" subtitle={`${riskPromptsSkipped >= 3 ? "â ï¸ You've skipped 3 in a row â you're optimizing for safety" : "Take it or skip it â but don't skip 3 in a row"}`} />
+          <div style={{ background: `linear-gradient(135deg, ${PURPLE}15, ${ACCENT}15)`, borderRadius: 12, padding: 24, border: `1px solid ${PURPLE}30` }}>
+            <div style={{ fontSize: 22, marginBottom: 12 }}>ð¡</div>
+            <div style={{ fontSize: 15, color: NAVY, fontWeight: 500, lineHeight: 1.5 }}>{currentRiskPrompt}</div>
+            <div style={{ display: "flex", gap: 8, marginTop: 16 }}>
+              <div style={{ background: GREEN + "15", color: GREEN, padding: "6px 16px", borderRadius: 8, fontSize: 12, fontWeight: 600 }}>Taking it â</div>
+              <div style={{ background: "#FEF2F2", color: RED, padding: "6px 16px", borderRadius: 8, fontSize: 12, fontWeight: 600 }}>Skipping ({riskPromptsSkipped}/3)</div>
+            </div>
+          </div>
+
+          <SectionHeader title="Execution Schedule" subtitle="Week 1 day-by-day" />
+          <div style={{ background: CARD_BG, borderRadius: 12, boxShadow: "0 1px 3px rgba(0,0,0,0.08)", overflow: "hidden" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse" }}>
+              <thead>
+                <tr style={{ background: LIGHT_BG }}>
+                  {["DAY", "CONTENT", "ENGAGEMENT", "TIME"].map(h => (
+                    <th key={h} style={{ textAlign: "left", padding: "9px 14px", fontSize: 11, color: "#94A3B8", fontWeight: 600 }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {[
+                  { day: "Sunday", content: "Finalize plan, batch-write posts", engagement: "â", time: "90 min" },
+                  { day: "Monday", content: "Polish Post 1", engagement: "Sonakshi, Ronak (2-3 comments)", time: "30 min" },
+                  { day: "Tuesday", content: "PUBLISH Post 1 (8-9am PT)", engagement: "Kaizad, Devashish + first-hour replies", time: "45 min" },
+                  { day: "Wednesday", content: "â", engagement: "Mohit, Vinav, Shardul", time: "20 min" },
+                  { day: "Thursday", content: "PUBLISH Post 2 (8-9am PT)", engagement: "Ronak, Sonakshi + first-hour replies", time: "45 min" },
+                  { day: "Friday", content: "â", engagement: "Kaizad, Devashish", time: "20 min" },
+                  { day: "Saturday", content: "PUBLISH Post 3 (9-10am PT)", engagement: "Remaining targets + first-hour", time: "40 min" },
+                ].map((row, i) => (
+                  <tr key={i} style={{ borderBottom: `1px solid ${LIGHT_BG}`, background: row.content.includes("PUBLISH") ? GREEN + "08" : "transparent" }}>
+                    <td style={{ padding: "10px 14px", fontSize: 13, fontWeight: row.content.includes("PUBLISH") ? 600 : 400, color: NAVY }}>{row.day}</td>
+                    <td style={{ padding: "10px 14px", fontSize: 12, color: row.content.includes("PUBLISH") ? GREEN : "#64748B", fontWeight: row.content.includes("PUBLISH") ? 600 : 400 }}>{row.content}</td>
+                    <td style={{ padding: "10px 14px", fontSize: 12, color: "#64748B" }}>{row.engagement}</td>
+                    <td style={{ padding: "10px 14px", fontSize: 12, color: "#94A3B8" }}>{row.time}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>)}
+
+        <div style={{ textAlign: "center", padding: "32px 0 16px", fontSize: 11, color: "#CBD5E1" }}>
+          LinkedIn Authority System v7.0 â {CURRENT_PHASE} Phase â Week {CURRENT_WEEK}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.render(<Dashboard />, document.getElementById("root"));
+</script>
+</body>
+</html>
